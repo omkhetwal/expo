@@ -7,6 +7,8 @@ import XCTest
 
 @available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
 class EXUpdatesLogReaderTests: XCTestCase {
+  let serialQueue = DispatchQueue(label: "dev.expo.updates.logging.test")
+
   func test_ReadLogsAsDictionaries() {
     let logger = UpdatesLogger()
     let logReader = UpdatesLogReader()
@@ -51,5 +53,85 @@ class EXUpdatesLogReaderTests: XCTestCase {
     XCTAssertTrue(logEntry2["updateId"] as? String == "myUpdateId")
     XCTAssertTrue(logEntry2["assetId"] as? String == "myAssetId")
     XCTAssertNil(logEntry2["stacktrace"])
-}
+  }
+
+  func test_Persistence() {
+    var entries: [String] = []
+    // Check empty persistence
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.clearEntries { _ in
+        UpdatesLogPersistence.readEntries { result, error in
+          if error != nil {
+            XCTFail("Error in reading entry: \(String(describing: error?.localizedDescription))")
+          }
+          entries = result ?? []
+          sem.signal()
+        }
+      }
+      sem.wait()
+    }
+    XCTAssertEqual(0, entries.count)
+
+    // Check the one entry case
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.appendEntry(entry: "Test string 1") { error in
+        if error != nil {
+          XCTFail("Error in appending entry: \(String(describing: error?.localizedDescription))")
+        }
+        UpdatesLogPersistence.readEntries { result, error in
+          if error != nil {
+            XCTFail("Error in reading entry: \(String(describing: error?.localizedDescription))")
+          }
+          entries = result ?? []
+          sem.signal()
+        }
+      }
+      sem.wait()
+    }
+    XCTAssertEqual(1, entries.count)
+    XCTAssertEqual("Test string 1", entries[0])
+
+    // Check the two entry case
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.appendEntry(entry: "Test string 2") { error in
+        if error != nil {
+          XCTFail("Error in appending entry: \(String(describing: error?.localizedDescription))")
+        }
+        UpdatesLogPersistence.readEntries { result, error in
+          if error != nil {
+            XCTFail("Error in reading entry: \(String(describing: error?.localizedDescription))")
+          }
+          entries = result ?? []
+          sem.signal()
+        }
+      }
+      sem.wait()
+    }
+    XCTAssertEqual(2, entries.count)
+    XCTAssertEqual("Test string 1", entries[0])
+    XCTAssertEqual("Test string 2", entries[1])
+
+    // Check filtering
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.filterEntries(filter: { entry in entry.contains("2") }) { error in
+        if error != nil {
+          XCTFail("Error in appending entry: \(String(describing: error?.localizedDescription))")
+        }
+        UpdatesLogPersistence.readEntries { result, error in
+          if error != nil {
+            XCTFail("Error in reading entry: \(String(describing: error?.localizedDescription))")
+          }
+          entries = result ?? []
+          sem.signal()
+        }
+      }
+      sem.wait()
+    }
+    XCTAssertEqual(1, entries.count)
+    XCTAssertEqual("Test string 2", entries[0])
+  }
 }

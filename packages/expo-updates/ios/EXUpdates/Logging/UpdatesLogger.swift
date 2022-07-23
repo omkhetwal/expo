@@ -23,7 +23,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .trace, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .trace, updateId: updateId, assetId: assetId)
     logger.trace(entry)
   }
 
@@ -42,7 +42,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .debug, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .debug, updateId: updateId, assetId: assetId)
     logger.debug(entry)
   }
 
@@ -61,7 +61,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .info, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .info, updateId: updateId, assetId: assetId)
     logger.info(entry)
   }
 
@@ -80,7 +80,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .warn, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .warn, updateId: updateId, assetId: assetId)
     logger.warn(entry)
   }
 
@@ -99,7 +99,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .error, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .error, updateId: updateId, assetId: assetId)
     logger.error(entry)
   }
 
@@ -118,7 +118,7 @@ public class UpdatesLogger: NSObject {
     updateId: String?,
     assetId: String?
   ) {
-    let entry = logEntryString(message: message, code: code, level: .fatal, updateId: updateId, assetId: assetId)
+    let entry = generateAndPersistLogEntry(message: message, code: code, level: .fatal, updateId: updateId, assetId: assetId)
     logger.fatal(entry)
   }
 
@@ -132,7 +132,7 @@ public class UpdatesLogger: NSObject {
 
   // MARK: - Private methods
 
-  func logEntryString(
+  func generateAndPersistLogEntry(
     message: String,
     code: UpdatesErrorCode = .None,
     level: ExpoModulesCore.LogType = .trace,
@@ -153,6 +153,9 @@ public class UpdatesLogger: NSObject {
       assetId: assetId,
       stacktrace: symbols
     )
-    return "\(logEntry.asString() ?? logEntry.message)"
+    let result = "\(logEntry.asString() ?? logEntry.message)"
+    UpdatesLogPersistence.appendEntry(entry: result) { _ in
+    }
+    return result
   }
 }

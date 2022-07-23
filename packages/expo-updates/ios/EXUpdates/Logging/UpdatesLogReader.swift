@@ -8,9 +8,10 @@ import ExpoModulesCore
 /**
  Class to read expo-updates logs using OSLogReader
  */
-@available(macOS 12.0, iOS 15.0, watchOS 8.0, tvOS 15.0, *)
 @objc(EXUpdatesLogReader)
 public class UpdatesLogReader: NSObject {
+  private let serialQueue = DispatchQueue(label: "dev.expo.updates.logging.reader")
+
   /**
    Get expo-updates logs newer than the given date
    Returns the log entries unpacked as dictionaries
@@ -25,6 +26,26 @@ public class UpdatesLogReader: NSObject {
   }
 
   /**
+   Purge all log entries written prior to the given date
+   */
+  @objc(purgeLogEntriesOlderThan:error:)
+  public func purgeLogEntries(olderThan: Date) throws {
+    let epoch = UInt(olderThan.timeIntervalSince1970)
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.filterEntries { entryString in
+        if let entry = UpdatesLogEntry.create(from: entryString) {
+          return entry.timestamp >= epoch
+        }
+        return false
+      } completion: { _ in
+        sem.signal()
+      }
+      sem.wait()
+    }
+  }
+
+  /**
    Get expo-updates logs newer than the given date
    Returned strings are all in the JSON format of UpdatesLogEntry
    Maximum of one day lookback is allowed
@@ -35,7 +56,35 @@ public class UpdatesLogReader: NSObject {
     let dateToUse = newerThan.timeIntervalSince1970 < earliestDate.timeIntervalSince1970 ?
       earliestDate :
       newerThan
+    let epoch = UInt(dateToUse.timeIntervalSince1970)
 
+    var result: [String] = []
+
+    serialQueue.sync {
+      let sem = DispatchSemaphore(value: 0)
+      UpdatesLogPersistence.readEntries { entries, error in
+        if error != nil {
+          print("UpdatesLogReader: error in getLogEntries: \(String(describing: error))")
+        } else {
+          result = entries ?? []
+        }
+        sem.signal()
+      }
+      sem.wait()
+    }
+
+    return result
+      .compactMap { entry in
+        UpdatesLogEntry.create(from: entry)
+      }
+      .filter { entry in
+        entry.timestamp >= epoch
+      }
+      .compactMap { entry in
+        entry.asString()
+      }
+
+    /*
     let logStore = try OSLogStore(scope: .currentProcessIdentifier)
     // Get all the logs since the given date.
     let position = logStore.position(date: dateToUse)
@@ -52,5 +101,6 @@ public class UpdatesLogReader: NSObject {
             let suffixFrom = entry.composedMessage.index(entry.composedMessage.startIndex, offsetBy: 2)
             return String(entry.composedMessage.suffix(from: suffixFrom))
           }
+     */
   }
 }
